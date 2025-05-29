@@ -1,0 +1,9 @@
+[project]
+name = "espn-nfl-scraper"
+version = "0.1.0"
+description = "A scraper for ESPN NFL data"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "scrapegraphai>=1.52.0",
+]
