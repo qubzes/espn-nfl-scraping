@@ -76,7 +76,7 @@ def main() -> None:
                     continue
 
                 player_link_element = cols[0].query_selector(
-                    "a.nfl-o-roster__player-name"
+                    ".nfl-o-roster__player-name"
                 )
                 if not player_link_element:
                     logger.warning(
