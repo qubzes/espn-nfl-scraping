@@ -200,11 +200,8 @@ def process_transaction_rows(
             player_link = row.query_selector("td:nth-child(4) a")
             if not player_link:
                 logger.warning("Missing player link")
-            full_name = player_link.inner_text().strip()
+            player_name = player_link.inner_text().strip()
             player_href = player_link.get_attribute("href")
-            name_parts = full_name.strip().split()
-            first_name = name_parts[0] if name_parts else ""
-            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
             # Get position from player profile page
             position = (
@@ -223,7 +220,7 @@ def process_transaction_rows(
 
             # Generate player key
             player_key = (
-                f"{first_name}_{last_name}_{to_team_fullname}".lower()
+                f"{player_name}_{to_team_fullname}".lower()
                 .replace(" ", "_")
                 .replace(".", "")
             )
@@ -232,8 +229,7 @@ def process_transaction_rows(
                 "from_team_fullname": from_team_fullname,
                 "to_team_fullname": to_team_fullname,
                 "date": str(trans_date.strftime("%Y-%m-%d")),
-                "first_name": first_name,
-                "last_name": last_name,
+                "player": player_name,
                 "position": position,
                 "transaction": transaction_type,
                 "player_key": player_key,

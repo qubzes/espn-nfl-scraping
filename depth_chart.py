@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from typing import Dict, List
 
 import pandas as pd
@@ -6,21 +7,27 @@ from playwright.sync_api import Browser, sync_playwright
 
 
 # Data Models
-class PositionData:
-    def __init__(self, position: str, starter: str, second: str, third: str, fourth: str) -> None:
+class PlayerDepthData:
+    def __init__(self, player_name: str, position: str, depth_order: str, team: str, scraped_date: str) -> None:
+        self.player_name = player_name
         self.position = position
-        self.starter = starter
-        self.second = second
-        self.third = third
-        self.fourth = fourth
+        self.depth_order = depth_order
+        self.team = team
+        self.scraped_date = scraped_date
+        self.player_key = (
+            f"{player_name}_{team}".lower()
+            .replace(" ", "_")
+            .replace("/", "_")
+        )
 
     def to_dict(self) -> Dict[str, str]:
         return {
+            "player_name": self.player_name,
             "position": self.position,
-            "starter": self.starter,
-            "second": self.second,
-            "third": self.third,
-            "fourth": self.fourth,
+            "depth_order": self.depth_order,
+            "team": self.team,
+            "scraped_date": self.scraped_date,
+            "player_key": self.player_key,
         }
 
 
@@ -49,86 +56,90 @@ def scrape_teams(browser: Browser) -> List[TeamData]:
         page.close()
 
 
-def get_team_depth(browser: Browser, team_name: str, depth_url: str) -> Dict[str, List[PositionData]]:
+def get_team_depth(browser: Browser, team_name: str, depth_url: str) -> List[PlayerDepthData]:
     """Scrape depth chart for a single NFL team."""
     page = browser.new_page()
+    scraped_date = datetime.now().strftime("%Y-%m-%d")
+    
     try:
         page.goto(depth_url, timeout=30000)
         page.wait_for_selector(".ResponsiveTable", timeout=10000)
-        formations: Dict[str, List[PositionData]] = {}
+        all_players: List[PlayerDepthData] = []
         tables = page.query_selector_all(".ResponsiveTable")
+        
         for table in tables:
-            title_element = table.query_selector(".Table__Title")
-            formation_name = title_element.inner_text().strip().lower().replace(" ", "_") if title_element else "unknown"
             tbody_elements = table.query_selector_all("table tbody")
             if len(tbody_elements) < 2:
                 continue
+            
             position_table, player_table = tbody_elements[0], tbody_elements[1]
             positions = position_table.query_selector_all("tr")
             player_rows = player_table.query_selector_all("tr")
-            formation_positions: List[PositionData] = []
+            
             for pos_row, player_row in zip(positions, player_rows):
                 pos_cell = pos_row.query_selector("td span")
                 position = pos_cell.inner_text().strip() if pos_cell else ""
                 player_cells = player_row.query_selector_all("td")
                 players = [cell.inner_text().strip() for cell in player_cells]
-                while len(players) < 4:
-                    players.append("")
-                formation_positions.append(
-                    PositionData(
-                        position=position,
-                        starter=players[0],
-                        second=players[1],
-                        third=players[2],
-                        fourth=players[3],
-                    )
-                )
-            formations[formation_name] = formation_positions
-        return formations
+                
+                depth_labels = ["starter", "second", "third", "fourth"]
+                for i, player_name in enumerate(players[:4]):
+                    if player_name:  # Only add non-empty player names
+                        all_players.append(PlayerDepthData(
+                            player_name=player_name,
+                            position=position,
+                            depth_order=depth_labels[i],
+                            team=team_name,
+                            scraped_date=scraped_date
+                        ))
+        
+        return all_players
     except Exception as e:
         print(f"Failed to scrape depth chart for {team_name}: {e}")
-        return {}
+        return []
     finally:
         page.close()
 
 
-def save_team_data(team_name: str, data: Dict[str, List[PositionData]]) -> None:
-    """Save depth chart data in JSON and Excel formats."""
+def save_all_data(all_data: List[PlayerDepthData]) -> None:
+    """Save all depth chart data to a single Excel file."""
     os.makedirs("depth_chart", exist_ok=True)
-    team_filename = team_name.lower().replace(' ', '_')
-    excel_file_path = os.path.join("depth_chart", f"{team_filename}.xlsx")
-    all_rows: List[List[str]] = []
-    for formation, positions in data.items():
-        all_rows.append([formation.upper()])
-        all_rows.append(["Position", "Starter", "Second", "Third", "Fourth"])
-        for pos in positions:
-            all_rows.append([pos.position, pos.starter, pos.second, pos.third, pos.fourth])
-        all_rows.append([])
-    pd.DataFrame(all_rows).to_excel(excel_file_path, index=False, header=False)
-    print(f"Saved depth chart to {excel_file_path}")
+    
+    df = pd.DataFrame([player.to_dict() for player in all_data])
+    excel_file_path = os.path.join("depth_chart", "depth_chart.xlsx")
+    df.to_excel(excel_file_path, index=False)
+    print(f"Saved all depth chart data to {excel_file_path}")
 
 
 def main() -> None:
     """Scrape and save depth charts for all NFL teams."""
+    all_player_data: List[PlayerDepthData] = []
+    
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
             teams = scrape_teams(browser)
             print(f"Found {len(teams)} NFL teams")
+            
             for team in teams:
                 print(f"Processing {team.name}...")
                 depth_data = get_team_depth(browser, team.name, team.url)
                 if depth_data:
-                    save_team_data(team.name, depth_data)
-                    print(f"✅ Completed {team.name}")
+                    all_player_data.extend(depth_data)
+                    print(f"✅ Completed {team.name} - {len(depth_data)} players")
                 else:
                     print(f"❌ No depth chart data for {team.name}")
+            
+            if all_player_data:
+                save_all_data(all_player_data)
+                print(f"Total players processed: {len(all_player_data)}")
+            
         except Exception as e:
             print(f"Fatal error: {e}")
         finally:
             browser.close()
+    
     print("🎉 Finished processing all teams!")
-
 
 
 if __name__ == "__main__":
