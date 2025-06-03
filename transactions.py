@@ -80,18 +80,18 @@ def get_player_position(player_url: str) -> str:
         return ""
 
 
-def fetch_transaction_rows(
-    page: Page, year: int, month: int
-) -> list[tuple[Any, int]]:
-    """Fetch all transaction rows for a given year and month through pagination."""
+def fetch_and_process_transactions(
+    page: Page, year: int, month: int, start_date: date, end_date: date
+) -> list[dict[str, str]]:
+    """Fetch and immediately process transaction rows for a given year and month."""
     base_url = (
         f"https://www.nfl.com/transactions/league/signings/{year}/{month}"
     )
-    transaction_rows: list[tuple[Any, int]] = []
+    transactions: list[dict[str, str]] = []
     page_number = 1
     after_token = None
 
-    logger.info(f"Fetching all transaction rows for {year}-{month:02d}")
+    logger.info(f"Fetching and processing transactions for {year}-{month:02d}")
 
     while True:
         url = f"{base_url}?after={after_token}" if after_token else base_url
@@ -106,10 +106,12 @@ def fetch_transaction_rows(
                 )
                 break
 
-            # Attach year to each row
-            rows_with_year = [(row, year) for row in rows]
-            transaction_rows.extend(rows_with_year)
-            logger.debug(f"Added {len(rows)} rows from page {page_number}")
+            # Process rows immediately while DOM is still valid
+            page_transactions = process_transaction_rows(
+                [(row, year) for row in rows], start_date, end_date
+            )
+            transactions.extend(page_transactions)
+            logger.debug(f"Processed {len(page_transactions)} transactions from page {page_number}")
 
             next_page_link = page.query_selector(
                 ".nfl-o-table-pagination__next"
@@ -136,16 +138,16 @@ def fetch_transaction_rows(
             break
 
     logger.info(
-        f"Total rows collected for {year}-{month:02d}: {len(transaction_rows)}"
+        f"Total transactions collected for {year}-{month:02d}: {len(transactions)}"
     )
-    return transaction_rows
-
-
+    return transactions
 def process_transaction_rows(
     rows: list[tuple[Any, int]], start_date: date, end_date: date
-) -> list[Any]:
+) -> list[dict[str, str]]:
     """Process transaction rows and return formatted transaction data."""
     transactions: list[dict[str, str]] = []
+
+    logger.debug(f"Processing {len(rows)} transaction rows")
 
     logger.info(f"Processing {len(rows)} transaction rows")
 
@@ -258,8 +260,8 @@ def process_transaction_rows(
 
         except Exception as e:
             logger.error(f"Error processing row: {str(e)}")
-            continue
-
+    logger.debug(f"Processed {len(transactions)} valid transactions")
+    return transactions
     logger.info(f"Processed {len(transactions)} valid transactions")
     return transactions
 
@@ -301,25 +303,21 @@ def main() -> None:
             )
 
         logger.info(f"Processing date range: {start_date} to {end_date}")
-        logger.info(f"Date ranges to process: {date_ranges}")
-
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
             page = browser.new_page()
 
-            all_rows: list[tuple[Any, int]] = []
+            all_transactions: list[dict[str, str]] = []
             for year, month in date_ranges:
-                month_rows = fetch_transaction_rows(page, year, month)
-                all_rows.extend(month_rows)
+                month_transactions = fetch_and_process_transactions(
+                    page, year, month, start_date, end_date
+                )
+                all_transactions.extend(month_transactions)
 
-            transactions = process_transaction_rows(
-                all_rows, start_date, end_date
-            )
-
-            df = pd.DataFrame(transactions)
+            df = pd.DataFrame(all_transactions)
             df.to_excel("transactions.xlsx", index=False)
             logger.info(
-                f"Saved {len(transactions)} transactions to transactions.xlsx"
+                f"Saved {len(all_transactions)} transactions to transactions.xlsx"
             )
             browser.close()
 

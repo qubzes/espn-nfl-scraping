@@ -95,10 +95,7 @@ def get_team_depth(browser: Browser, team_name: str, depth_url: str) -> Dict[str
 def save_team_data(team_name: str, data: Dict[str, List[PositionData]]) -> None:
     """Save depth chart data in JSON and Excel formats."""
     os.makedirs("depth_chart", exist_ok=True)
-    
     team_filename = team_name.lower().replace(' ', '_')
-
-    # Save Excel
     excel_file_path = os.path.join("depth_chart", f"{team_filename}.xlsx")
     all_rows: List[List[str]] = []
     for formation, positions in data.items():
