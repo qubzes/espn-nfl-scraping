@@ -3,8 +3,8 @@ import logging
 import re
 from datetime import date, datetime
 from typing import Any, Optional
-import pandas as pd
 
+import pandas as pd
 from playwright.sync_api import (
     Browser,
     Page,
@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 browser: Optional[Browser] = None
 
 
-def generate_date_ranges(
-    start_date: date, end_date: date
-) -> list[tuple[int, int]]:
+def generate_date_ranges(start_date: date, end_date: date) -> list[tuple[int, int]]:
     """Generate list of (year, month) tuples covering the date range."""
     date_ranges: set[tuple[int, int]] = set()
     current = start_date
@@ -53,28 +51,20 @@ def get_player_position(player_url: str) -> str:
         logger.debug(f"Fetching position from: {player_url}")
         page.goto(player_url, timeout=60000)
 
-        position_element = page.query_selector(
-            ".nfl-c-player-header__position"
-        )
-        position = (
-            position_element.inner_text().strip() if position_element else ""
-        )
+        position_element = page.query_selector(".nfl-c-player-header__position")
+        position = position_element.inner_text().strip() if position_element else ""
 
         page.close()
         logger.debug(f"Found position: {position}")
         return position
 
     except TimeoutError:
-        logger.warning(
-            f"Timeout while fetching player position from {player_url}"
-        )
+        logger.warning(f"Timeout while fetching player position from {player_url}")
         if page:
             page.close()
         return ""
     except Exception as e:
-        logger.error(
-            f"Error fetching player position from {player_url}: {str(e)}"
-        )
+        logger.error(f"Error fetching player position from {player_url}: {str(e)}")
         if page:
             page.close()
         return ""
@@ -84,9 +74,7 @@ def fetch_and_process_transactions(
     page: Page, year: int, month: int, start_date: date, end_date: date
 ) -> list[dict[str, str]]:
     """Fetch and immediately process transaction rows for a given year and month."""
-    base_url = (
-        f"https://www.nfl.com/transactions/league/signings/{year}/{month}"
-    )
+    base_url = f"https://www.nfl.com/transactions/league/signings/{year}/{month}"
     transactions: list[dict[str, str]] = []
     page_number = 1
     after_token = None
@@ -101,9 +89,7 @@ def fetch_and_process_transactions(
 
             rows = page.query_selector_all(".d3-o-table--detailed tbody tr")
             if not rows:
-                logger.warning(
-                    f"No transaction rows found on page {page_number}"
-                )
+                logger.warning(f"No transaction rows found on page {page_number}")
                 break
 
             # Process rows immediately while DOM is still valid
@@ -115,9 +101,7 @@ def fetch_and_process_transactions(
                 f"Processed {len(page_transactions)} transactions from page {page_number}"
             )
 
-            next_page_link = page.query_selector(
-                ".nfl-o-table-pagination__next"
-            )
+            next_page_link = page.query_selector(".nfl-o-table-pagination__next")
             if not next_page_link:
                 logger.info(f"No more pages for {year}-{month:02d}")
                 break
@@ -171,9 +155,7 @@ def process_transaction_rows(
                     logger.debug(f"Date {trans_date} outside range, skipping")
                     continue
             except ValueError:
-                logger.warning(
-                    f"Invalid date: {row_year}-{month_num:02d}-{day:02d}"
-                )
+                logger.warning(f"Invalid date: {row_year}-{month_num:02d}-{day:02d}")
                 continue
 
             # Extract from team
@@ -213,9 +195,7 @@ def process_transaction_rows(
             # Extract transaction type
             transaction_cell = row.query_selector("td:nth-child(6)")
             transaction_type = (
-                transaction_cell.inner_text().strip()
-                if transaction_cell
-                else ""
+                transaction_cell.inner_text().strip() if transaction_cell else ""
             )
 
             # Generate player key
@@ -252,9 +232,7 @@ def main() -> None:
     parser.add_argument(
         "--start-date", type=str, help="Start date in YYYY-MM-DD format"
     )
-    parser.add_argument(
-        "--end-date", type=str, help="End date in YYYY-MM-DD format"
-    )
+    parser.add_argument("--end-date", type=str, help="End date in YYYY-MM-DD format")
 
     args = parser.parse_args()
 
@@ -269,17 +247,13 @@ def main() -> None:
 
             date_ranges = generate_date_ranges(start_date, end_date)
         elif args.start_date or args.end_date:
-            logger.error(
-                "Both --start-date and --end-date must be provided together"
-            )
+            logger.error("Both --start-date and --end-date must be provided together")
             return
         else:
             today = datetime.now().date()
             start_date = end_date = today
             date_ranges = [(today.year, today.month)]
-            logger.info(
-                "No date range provided, using today's date as default"
-            )
+            logger.info("No date range provided, using today's date as default")
 
         logger.info(f"Processing date range: {start_date} to {end_date}")
         with sync_playwright() as pw:

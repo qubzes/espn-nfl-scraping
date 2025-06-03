@@ -5,7 +5,6 @@ from typing import Dict, List
 import pandas as pd
 from playwright.sync_api import Browser, sync_playwright
 
-
 # Position abbreviation to full name mapping
 POSITION_MAPPING = {
     "LDE": "Left Defensive End",
@@ -124,9 +123,7 @@ def get_team_depth(
 
             for pos_row, player_row in zip(positions, player_rows):
                 pos_cell = pos_row.query_selector("td span")
-                position_abbr = (
-                    pos_cell.inner_text().strip() if pos_cell else ""
-                )
+                position_abbr = pos_cell.inner_text().strip() if pos_cell else ""
                 # Convert abbreviation to full position name
                 position = POSITION_MAPPING.get(position_abbr, position_abbr)
 
@@ -183,9 +180,7 @@ def main() -> None:
                 depth_data = get_team_depth(browser, team.name, team.url)
                 if depth_data:
                     all_player_data.extend(depth_data)
-                    print(
-                        f"✅ Completed {team.name} - {len(depth_data)} players"
-                    )
+                    print(f"✅ Completed {team.name} - {len(depth_data)} players")
                 else:
                     print(f"❌ No depth chart data for {team.name}")
 

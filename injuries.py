@@ -1,14 +1,11 @@
 import argparse
 import logging
-import os
 import re
 from datetime import datetime
 from typing import Dict, List
+
 import pandas as pd
 from playwright.sync_api import Browser, sync_playwright
-
-# filepath: /home/destiny/projects/TrustleLab/espn/injuries.py
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,9 +33,7 @@ class InjuryData:
         self.practice_status = practice_status
         self.game_status = game_status
         self.date = date
-        self.player_key = (
-            f"{player}_{team}".lower().replace(" ", "_").replace("/", "_")
-        )
+        self.player_key = f"{player}_{team}".lower().replace(" ", "_").replace("/", "_")
 
     def to_dict(self) -> Dict[str, str]:
         return {
@@ -58,24 +53,22 @@ def parse_game_date(date_header: str, year: int) -> str:
     try:
         # Extract month and day from header
         # Remove day of week and extract month/day
-        date_part = date_header.split(', ')[1] if ', ' in date_header else date_header
-        
+        date_part = date_header.split(", ")[1] if ", " in date_header else date_header
+
         # Remove ordinal suffixes (TH, ST, ND, RD)
-        date_clean = re.sub(r'(\d+)(ST|ND|RD|TH)', r'\1', date_part.upper())
-        
+        date_clean = re.sub(r"(\d+)(ST|ND|RD|TH)", r"\1", date_part.upper())
+
         # Parse the date with the provided year
         date_str = f"{date_clean} {year}"
         parsed_date = datetime.strptime(date_str, "%B %d %Y")
-        
+
         return parsed_date.strftime("%Y-%m-%d")
     except Exception as e:
         logger.warning(f"Could not parse date from '{date_header}': {e}")
         return datetime.now().strftime("%Y-%m-%d")
 
 
-def scrape_injury_reports(
-    browser: Browser, year: int, week: int
-) -> List[InjuryData]:
+def scrape_injury_reports(browser: Browser, year: int, week: int) -> List[InjuryData]:
     """Scrape NFL injury reports for a specific year and week."""
     page = browser.new_page()
     all_injuries: List[InjuryData] = []
@@ -92,10 +85,12 @@ def scrape_injury_reports(
             return []
 
         # Get all elements in order (headers and units)
-        all_elements = injury_wrap.query_selector_all("h2.d3-o-section-title, .nfl-o-injury-report__unit")
-        
+        all_elements = injury_wrap.query_selector_all(
+            "h2.d3-o-section-title, .nfl-o-injury-report__unit"
+        )
+
         current_date = ""
-        
+
         for element in all_elements:
             # Check if this is a date header
             if element.get_attribute("class") == "d3-o-section-title":
@@ -103,7 +98,7 @@ def scrape_injury_reports(
                 current_date = parse_game_date(date_text, year)
                 logger.info(f"Processing games on: {current_date}")
                 continue
-            
+
             # This is an injury report unit
             if current_date:
                 injuries_for_unit = process_injury_unit(element, current_date)
@@ -122,15 +117,19 @@ def scrape_injury_reports(
 def process_injury_unit(unit_element, game_date: str) -> List[InjuryData]:
     """Process a single injury report unit (one game)."""
     injuries = []
-    
+
     try:
         # Process each team's injury table
         team_sections = unit_element.query_selector_all(".nfl-t-stats__title")
-        injury_tables = unit_element.query_selector_all(".d3-o-table--horizontal-scroll table")
+        injury_tables = unit_element.query_selector_all(
+            ".d3-o-table--horizontal-scroll table"
+        )
 
         for team_section, table in zip(team_sections, injury_tables):
             # Get team name from section title
-            team_name_element = team_section.query_selector(".d3-o-section-sub-title span")
+            team_name_element = team_section.query_selector(
+                ".d3-o-section-sub-title span"
+            )
             if not team_name_element:
                 continue
 
@@ -176,7 +175,7 @@ def process_injury_unit(unit_element, game_date: str) -> List[InjuryData]:
 
     except Exception as e:
         logger.error(f"Error processing injury unit: {e}")
-    
+
     return injuries
 
 
@@ -186,32 +185,21 @@ def save_injury_data(injuries: List[InjuryData], year: int, week: int) -> None:
         logger.warning("No injury data to save")
         return
 
-    os.makedirs("injuries", exist_ok=True)
     df = pd.DataFrame([injury.to_dict() for injury in injuries])
-    
+
     filename = f"injuries_{year}_week{week}.xlsx"
-    filepath = os.path.join("injuries", filename)
-    
-    df.to_excel(filepath, index=False)
-    logger.info(f"Saved {len(injuries)} injury records to {filepath}")
+    df.to_excel(filename, index=False)
+    logger.info(f"Saved {len(injuries)} injury records to {filename}")
 
 
 def main() -> None:
     """Main function to scrape NFL injury reports."""
-    parser = argparse.ArgumentParser(
-        description="NFL Injury Reports Scraper"
+    parser = argparse.ArgumentParser(description="NFL Injury Reports Scraper")
+    parser.add_argument(
+        "--year", type=int, required=True, help="NFL season year (e.g., 2023)"
     )
     parser.add_argument(
-        "--year",
-        type=int,
-        required=True,
-        help="NFL season year (e.g., 2023)"
-    )
-    parser.add_argument(
-        "--week",
-        type=int,
-        required=True,
-        help="NFL week number (1-18)"
+        "--week", type=int, required=True, help="NFL week number (1-18)"
     )
 
     args = parser.parse_args()

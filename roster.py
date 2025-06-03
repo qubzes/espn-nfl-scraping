@@ -1,7 +1,8 @@
 import logging
 from datetime import datetime
-from playwright.sync_api import sync_playwright
+
 import pandas as pd
+from playwright.sync_api import sync_playwright
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,19 +44,14 @@ def main() -> None:
 
             team_url = team_link.get_attribute("href")
             team_roster_url = f"https://www.nfl.com{team_url}roster"
-            teams_data.append({
-                "name": team_name,
-                "roster_url": team_roster_url
-            })
+            teams_data.append({"name": team_name, "roster_url": team_roster_url})
 
         # Now process each team's roster
         for i, team_data in enumerate(teams_data, 1):
             team_name = team_data["name"]
             team_roster_url = team_data["roster_url"]
-            
-            logger.info(
-                f"Processing team {i}/{len(teams_data)}: {team_name}"
-            )
+
+            logger.info(f"Processing team {i}/{len(teams_data)}: {team_name}")
             logger.debug(f"Navigating to roster: {team_roster_url}")
 
             page.goto(team_roster_url, timeout=60000)
@@ -79,9 +75,7 @@ def main() -> None:
                     ".nfl-o-roster__player-name"
                 )
                 if not player_link_element:
-                    logger.warning(
-                        f"Player link not found for row {j} in {team_name}"
-                    )
+                    logger.warning(f"Player link not found for row {j} in {team_name}")
                     continue
 
                 player_name = player_link_element.inner_text().strip()
@@ -94,39 +88,40 @@ def main() -> None:
                 college = cols[7].inner_text().strip()
                 player_link = player_link_element.get_attribute("href") or ""
 
-                players_data.append({
-                    "name": player_name,
-                    "jersey_number": jersey_number,
-                    "position": position,
-                    "status": status,
-                    "height": height,
-                    "weight": weight,
-                    "experience": experience,
-                    "college": college,
-                    "player_link": player_link
-                })
+                players_data.append(
+                    {
+                        "name": player_name,
+                        "jersey_number": jersey_number,
+                        "position": position,
+                        "status": status,
+                        "height": height,
+                        "weight": weight,
+                        "experience": experience,
+                        "college": college,
+                        "player_link": player_link,
+                    }
+                )
 
             # Now fetch ages for each player
             for player_data in players_data:
                 player_name = player_data["name"]
                 logger.debug(f"Processing player: {player_name}")
-                
+
                 player_age = ""
                 if player_data["player_link"]:
                     try:
                         logger.debug(f"Fetching age for {player_name}")
                         page.goto(
-                            f"https://www.nfl.com{player_data['player_link']}", timeout=60000
+                            f"https://www.nfl.com{player_data['player_link']}",
+                            timeout=60000,
                         )
                         page.wait_for_load_state("domcontentloaded")
-                        
+
                         age_element = page.query_selector(
                             '.nfl-c-player-info__key:has-text("Age") + .nfl-c-player-info__value'
                         )
                         player_age = (
-                            age_element.inner_text().strip()
-                            if age_element
-                            else "N/A"
+                            age_element.inner_text().strip() if age_element else "N/A"
                         )
                     except Exception as e:
                         logger.error(
