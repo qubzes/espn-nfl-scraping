@@ -61,8 +61,7 @@ def main() -> None:
             player_rows = page.query_selector_all("tbody tr")
             logger.info(f"Found {len(player_rows)} players for {team_name}")
 
-            # Collect all player data from current page before any navigation
-            players_data: list[dict[str, str]] = []
+            # Collect all player data from current page
             for j, row in enumerate(player_rows, 1):
                 cols = row.query_selector_all("td")
                 if len(cols) < 8:
@@ -86,48 +85,6 @@ def main() -> None:
                 weight = cols[5].inner_text().strip()
                 experience = cols[6].inner_text().strip()
                 college = cols[7].inner_text().strip()
-                player_link = player_link_element.get_attribute("href") or ""
-
-                players_data.append(
-                    {
-                        "name": player_name,
-                        "jersey_number": jersey_number,
-                        "position": position,
-                        "status": status,
-                        "height": height,
-                        "weight": weight,
-                        "experience": experience,
-                        "college": college,
-                        "player_link": player_link,
-                    }
-                )
-
-            # Now fetch ages for each player
-            for player_data in players_data:
-                player_name = player_data["name"]
-                logger.debug(f"Processing player: {player_name}")
-
-                player_age = ""
-                if player_data["player_link"]:
-                    try:
-                        logger.debug(f"Fetching age for {player_name}")
-                        page.goto(
-                            f"https://www.nfl.com{player_data['player_link']}",
-                            timeout=60000,
-                        )
-                        page.wait_for_load_state("domcontentloaded")
-
-                        age_element = page.query_selector(
-                            '.nfl-c-player-info__key:has-text("Age") + .nfl-c-player-info__value'
-                        )
-                        player_age = (
-                            age_element.inner_text().strip() if age_element else "N/A"
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Error fetching player age for {player_name}: {e}"
-                        )
-                        player_age = "N/A"
 
                 player_key = (
                     f"{player_name}_{team_name}".lower()
@@ -138,15 +95,14 @@ def main() -> None:
                 roster_data.append(
                     {
                         "player": player_name,
-                        "jersey_n": player_data["jersey_number"],
-                        "position": player_data["position"],
-                        "status": player_data["status"],
+                        "jersey_n": jersey_number,
+                        "position": position,
+                        "status": status,
                         "team": team_name,
-                        "height": player_data["height"],
-                        "weight": player_data["weight"],
-                        "age": player_age,
-                        "experience": player_data["experience"],
-                        "college": player_data["college"],
+                        "height": height,
+                        "weight": weight,
+                        "experience": experience,
+                        "college": college,
                         "player_key": player_key,
                         "date_scraped": datetime.now().strftime("%Y-%m-%d"),
                     }
