@@ -1,9 +1,9 @@
 import argparse
-import json
 import logging
 import re
 from datetime import date, datetime
 from typing import Any, Optional
+import pandas as pd
 
 from playwright.sync_api import (
     Browser,
@@ -15,7 +15,7 @@ from playwright.sync_api import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -316,11 +316,10 @@ def main() -> None:
                 all_rows, start_date, end_date
             )
 
-            output_file = "transactions.json"
-            with open(output_file, "w") as f:
-                json.dump(transactions, f, indent=2)
+            df = pd.DataFrame(transactions)
+            df.to_excel("transactions.xlsx", index=False)
             logger.info(
-                f"Saved {len(transactions)} transactions to {output_file}"
+                f"Saved {len(transactions)} transactions to transactions.xlsx"
             )
             browser.close()
 
