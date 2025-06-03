@@ -1,9 +1,10 @@
 import json
 import os
-from typing import List, Union, Dict
-from pydantic import BaseModel, RootModel
-from playwright.sync_api import sync_playwright, Browser
+from typing import Dict, List, Union
+
 import pandas as pd
+from playwright.sync_api import Browser, sync_playwright
+from pydantic import BaseModel, RootModel
 
 
 # Injury Models
@@ -92,9 +93,7 @@ def scrape_teams(browser: Browser) -> List[TeamData]:
         page.close()
 
 
-def get_team_depth(
-    browser: Browser, team_name: str, depth_url: str
-) -> DepthChartData:
+def get_team_depth(browser: Browser, team_name: str, depth_url: str) -> DepthChartData:
     """Get depth chart for a single NFL team using a single browser."""
     page = browser.new_page()
     try:
@@ -119,9 +118,7 @@ def get_team_depth(
                 for position_row, player_row in zip(positions, player_rows):
                     position_cell = position_row.query_selector("td span")
                     position = (
-                        position_cell.inner_text().strip()
-                        if position_cell
-                        else ""
+                        position_cell.inner_text().strip() if position_cell else ""
                     )
                     player_cells = player_row.query_selector_all("td")
                     players: List[str] = []
@@ -144,16 +141,12 @@ def get_team_depth(
                 formations[formation_name] = formation_positions
         return DepthChartData(root=formations)
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to scrape depth chart for {team_name}: {e}"
-        )
+        raise RuntimeError(f"Failed to scrape depth chart for {team_name}: {e}")
     finally:
         page.close()
 
 
-def get_team_roster(
-    browser: Browser, team_name: str, roster_url: str
-) -> RosterData:
+def get_team_roster(browser: Browser, team_name: str, roster_url: str) -> RosterData:
     """Scrape roster for a single NFL team using a single browser."""
     page = browser.new_page()
     try:
@@ -212,9 +205,7 @@ def get_team_roster(
         page.close()
 
 
-def get_team_injuries(
-    browser: Browser, team_name: str, injury_url: str
-) -> Injuries:
+def get_team_injuries(browser: Browser, team_name: str, injury_url: str) -> Injuries:
     """Scrape injury data for a single NFL team using a single browser."""
     page = browser.new_page()
     try:
@@ -227,41 +218,25 @@ def get_team_injuries(
             content_list = date_element.evaluate_handle(
                 "element => element.nextElementSibling"
             ).as_element()
-            class_attr = (
-                content_list.get_attribute("class") if content_list else None
-            )
+            class_attr = content_list.get_attribute("class") if content_list else None
             if content_list and class_attr and "ContentList" in class_attr:
-                injury_items = content_list.query_selector_all(
-                    ".ContentList__Item"
-                )
+                injury_items = content_list.query_selector_all(".ContentList__Item")
                 for item in injury_items:
                     name_element = item.query_selector(".Athlete__PlayerName")
-                    position_element = item.query_selector(
-                        ".Athlete__NameDetails"
-                    )
+                    position_element = item.query_selector(".Athlete__NameDetails")
                     status_element = item.query_selector(".TextStatus")
-                    details_element = item.query_selector(
-                        ".pt3.clr-gray-04.n8"
-                    )
-                    name = (
-                        name_element.inner_text().strip()
-                        if name_element
-                        else ""
-                    )
+                    details_element = item.query_selector(".pt3.clr-gray-04.n8")
+                    name = name_element.inner_text().strip() if name_element else ""
                     position = (
                         position_element.inner_text().strip()
                         if position_element
                         else ""
                     )
                     status = (
-                        status_element.inner_text().strip()
-                        if status_element
-                        else ""
+                        status_element.inner_text().strip() if status_element else ""
                     )
                     details = (
-                        details_element.inner_text().strip()
-                        if details_element
-                        else ""
+                        details_element.inner_text().strip() if details_element else ""
                     )
                     injury_data = InjuryData(
                         date=date,
@@ -306,9 +281,7 @@ def get_team_transactions(
                     )
         return Transactions(root=transactions)
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to scrape transactions for {team_name}: {e}"
-        )
+        raise RuntimeError(f"Failed to scrape transactions for {team_name}: {e}")
     finally:
         page.close()
 
@@ -448,35 +421,25 @@ def main() -> None:
                     try:
                         # 1. Get depth chart
                         print(f"  Getting depth chart for {team.name}...")
-                        depth_data = get_team_depth(
-                            browser, team.name, team.url
-                        )
+                        depth_data = get_team_depth(browser, team.name, team.url)
                         save_team_data(team.name, depth_data, "depth_chart")
                         # 2. Get roster
                         print(f"  Getting roster for {team.name}...")
                         roster_url = team.url.replace("/depth/", "/roster/")
-                        roster_data = get_team_roster(
-                            browser, team.name, roster_url
-                        )
+                        roster_data = get_team_roster(browser, team.name, roster_url)
                         save_team_data(team.name, roster_data, "roster")
                         # 3. Get injuries
                         print(f"  Getting injuries for {team.name}...")
                         injury_url = team.url.replace("/depth/", "/injuries/")
-                        injury_data = get_team_injuries(
-                            browser, team.name, injury_url
-                        )
+                        injury_data = get_team_injuries(browser, team.name, injury_url)
                         save_team_data(team.name, injury_data, "injuries")
                         # 4. Get transactions
                         print(f"  Getting transactions for {team.name}...")
-                        transaction_url = team.url.replace(
-                            "/depth/", "/transactions/"
-                        )
+                        transaction_url = team.url.replace("/depth/", "/transactions/")
                         transaction_data = get_team_transactions(
                             browser, team.name, transaction_url
                         )
-                        save_team_data(
-                            team.name, transaction_data, "transactions"
-                        )
+                        save_team_data(team.name, transaction_data, "transactions")
                         print(f"  ✅ Completed {team.name}")
                     except Exception as e:
                         print(f"  ❌ Error processing {team.name}: {e}")

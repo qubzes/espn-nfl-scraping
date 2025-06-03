@@ -1,0 +1,334 @@
+import argparse
+import json
+import logging
+import re
+from datetime import date, datetime
+from typing import Any, Optional
+
+from playwright.sync_api import (
+    Browser,
+    Page,
+    TimeoutError,
+    sync_playwright,
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+# Global browser instance
+browser: Optional[Browser] = None
+
+
+def generate_date_ranges(
+    start_date: date, end_date: date
+) -> list[tuple[int, int]]:
+    """Generate list of (year, month) tuples covering the date range."""
+    date_ranges: set[tuple[int, int]] = set()
+    current = start_date
+
+    while current <= end_date:
+        date_ranges.add((current.year, current.month))
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1, day=1)
+        else:
+            current = current.replace(month=current.month + 1, day=1)
+
+    return sorted(date_ranges)
+
+
+def get_player_position(player_url: str) -> str:
+    """Fetch player position from their profile page."""
+    global browser
+    if not browser:
+        logger.error("Browser not initialized")
+        return ""
+
+    page = None
+    try:
+        page = browser.new_page()
+        logger.debug(f"Fetching position from: {player_url}")
+        page.goto(player_url, timeout=60000)
+
+        position_element = page.query_selector(
+            ".nfl-c-player-header__position"
+        )
+        position = (
+            position_element.inner_text().strip() if position_element else ""
+        )
+
+        page.close()
+        logger.debug(f"Found position: {position}")
+        return position
+
+    except TimeoutError:
+        logger.warning(
+            f"Timeout while fetching player position from {player_url}"
+        )
+        if page:
+            page.close()
+        return ""
+    except Exception as e:
+        logger.error(
+            f"Error fetching player position from {player_url}: {str(e)}"
+        )
+        if page:
+            page.close()
+        return ""
+
+
+def fetch_transaction_rows(
+    page: Page, year: int, month: int
+) -> list[tuple[Any, int]]:
+    """Fetch all transaction rows for a given year and month through pagination."""
+    base_url = (
+        f"https://www.nfl.com/transactions/league/signings/{year}/{month}"
+    )
+    transaction_rows: list[tuple[Any, int]] = []
+    page_number = 1
+    after_token = None
+
+    logger.info(f"Fetching all transaction rows for {year}-{month:02d}")
+
+    while True:
+        url = f"{base_url}?after={after_token}" if after_token else base_url
+        try:
+            logger.debug(f"Navigating to page {page_number}: {url}")
+            page.goto(url, timeout=60000)
+
+            rows = page.query_selector_all(".d3-o-table--detailed tbody tr")
+            if not rows:
+                logger.warning(
+                    f"No transaction rows found on page {page_number}"
+                )
+                break
+
+            # Attach year to each row
+            rows_with_year = [(row, year) for row in rows]
+            transaction_rows.extend(rows_with_year)
+            logger.debug(f"Added {len(rows)} rows from page {page_number}")
+
+            next_page_link = page.query_selector(
+                ".nfl-o-table-pagination__next"
+            )
+            if not next_page_link:
+                logger.info(f"No more pages for {year}-{month:02d}")
+                break
+
+            href = next_page_link.get_attribute("href")
+            after_token = (
+                href.split("after=")[-1] if href and "after=" in href else None
+            )
+            page_number += 1
+
+        except TimeoutError:
+            logger.error(
+                f"Timeout while loading page {page_number} for {year}-{month:02d}"
+            )
+            break
+        except Exception as e:
+            logger.error(
+                f"Error fetching page {page_number} for {year}-{month:02d}: {str(e)}"
+            )
+            break
+
+    logger.info(
+        f"Total rows collected for {year}-{month:02d}: {len(transaction_rows)}"
+    )
+    return transaction_rows
+
+
+def process_transaction_rows(
+    rows: list[tuple[Any, int]], start_date: date, end_date: date
+) -> list[Any]:
+    """Process transaction rows and return formatted transaction data."""
+    transactions: list[dict[str, str]] = []
+
+    logger.info(f"Processing {len(rows)} transaction rows")
+
+    for row, row_year in rows:
+        try:
+            date_cell = row.query_selector("td:nth-child(3)")
+            date_text = date_cell.inner_text().strip() if date_cell else ""
+            if not date_text or not re.match(r"\d{1,2}/\d{1,2}", date_text):
+                logger.warning(f"Invalid or missing date format: {date_text}")
+                continue
+
+            month_num, day = map(int, date_text.split("/"))
+
+            try:
+                trans_date = datetime(row_year, month_num, day).date()
+                if not (start_date <= trans_date <= end_date):
+                    logger.debug(f"Date {trans_date} outside range, skipping")
+                    continue
+            except ValueError:
+                logger.warning(
+                    f"Invalid date: {row_year}-{month_num:02d}-{day:02d}"
+                )
+                continue
+
+            # Extract from team
+            from_team_fullname_cell = row.query_selector(
+                "td:nth-child(1) .d3-o-club-fullname"
+            )
+            from_team_fullname = (
+                from_team_fullname_cell.inner_text().strip()
+                if from_team_fullname_cell
+                else ""
+            )
+
+            from_team_shortname_cell = row.query_selector(
+                "td:nth-child(1) .d3-o-club-shortname"
+            )
+            from_team_shortname = (
+                from_team_shortname_cell.inner_text().strip()
+                if from_team_shortname_cell
+                else ""
+            )
+
+            # Extract to team
+            to_team_fullname_cell = row.query_selector(
+                "td:nth-child(2) .d3-o-club-fullname"
+            )
+            to_team_fullname = (
+                to_team_fullname_cell.inner_text().strip()
+                if to_team_fullname_cell
+                else ""
+            )
+
+            to_team_shortname_cell = row.query_selector(
+                "td:nth-child(2) .d3-o-club-shortname"
+            )
+            to_team_shortname = (
+                to_team_shortname_cell.inner_text().strip()
+                if to_team_shortname_cell
+                else ""
+            )
+
+            # Extract player name and URL
+            player_link = row.query_selector("td:nth-child(4) a")
+            if not player_link:
+                logger.warning("Missing player link")
+                continue
+            full_name = player_link.inner_text().strip()
+            player_href = player_link.get_attribute("href")
+            name_parts = full_name.strip().split()
+            first_name = name_parts[0] if name_parts else ""
+            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+            # Get position from player profile page
+            position = (
+                get_player_position(f"https://www.nfl.com{player_href}")
+                if player_href
+                else ""
+            )
+
+            # Extract transaction type
+            transaction_cell = row.query_selector("td:nth-child(6)")
+            transaction_type = (
+                transaction_cell.inner_text().strip()
+                if transaction_cell
+                else ""
+            )
+
+            # Generate player key
+            player_key = (
+                f"{first_name}_{last_name}_{to_team_shortname}".lower()
+                .replace(" ", "_")
+                .replace(".", "")
+            )
+
+            transaction_data: dict[str, str] = {
+                "from_team_fullname": from_team_fullname,
+                "from_team_shortname": from_team_shortname,
+                "to_team_fullname": to_team_fullname,
+                "to_team_shortname": to_team_shortname,
+                "date": str(trans_date.strftime("%Y-%m-%d")),
+                "first_name": first_name,
+                "last_name": last_name,
+                "position": position,
+                "transaction": transaction_type,
+                "player_key": player_key,
+            }
+            transactions.append(transaction_data)
+            logger.debug(f"Added transaction: {player_key}")
+
+        except Exception as e:
+            logger.error(f"Error processing row: {str(e)}")
+            continue
+
+    logger.info(f"Processed {len(transactions)} valid transactions")
+    return transactions
+
+
+def main() -> None:
+    global browser
+
+    parser = argparse.ArgumentParser(description="NFL Transactions Scraper")
+    parser.add_argument(
+        "--start-date", type=str, help="Start date in YYYY-MM-DD format"
+    )
+    parser.add_argument(
+        "--end-date", type=str, help="End date in YYYY-MM-DD format"
+    )
+
+    args = parser.parse_args()
+
+    try:
+        if args.start_date and args.end_date:
+            start_date = datetime.strptime(args.start_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(args.end_date, "%Y-%m-%d").date()
+
+            if start_date > end_date:
+                logger.error("Start date must be before or equal to end date")
+                return
+
+            date_ranges = generate_date_ranges(start_date, end_date)
+        elif args.start_date or args.end_date:
+            logger.error(
+                "Both --start-date and --end-date must be provided together"
+            )
+            return
+        else:
+            today = datetime.now().date()
+            start_date = end_date = today
+            date_ranges = [(today.year, today.month)]
+            logger.info(
+                "No date range provided, using today's date as default"
+            )
+
+        logger.info(f"Processing date range: {start_date} to {end_date}")
+        logger.info(f"Date ranges to process: {date_ranges}")
+
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            all_rows: list[tuple[Any, int]] = []
+            for year, month in date_ranges:
+                month_rows = fetch_transaction_rows(page, year, month)
+                all_rows.extend(month_rows)
+
+            transactions = process_transaction_rows(
+                all_rows, start_date, end_date
+            )
+
+            output_file = "transactions.json"
+            with open(output_file, "w") as f:
+                json.dump(transactions, f, indent=2)
+            logger.info(
+                f"Saved {len(transactions)} transactions to {output_file}"
+            )
+            browser.close()
+
+    except ValueError as e:
+        logger.error(f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+
+
+if __name__ == "__main__":
+    main()
