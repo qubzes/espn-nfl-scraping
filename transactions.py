@@ -15,7 +15,7 @@ from playwright.sync_api import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
+    handlers=[logging.StreamHandler()],   
 )
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ browser: Optional[Browser] = None
 
 def generate_date_ranges(
     start_date: date, end_date: date
-) -> list[tuple[int, int]]:
+) -> list[tuple[int, int]]: 
     """Generate list of (year, month) tuples covering the date range."""
     date_ranges: set[tuple[int, int]] = set()
     current = start_date

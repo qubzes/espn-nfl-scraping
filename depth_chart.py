@@ -1,4 +1,3 @@
-import json
 import os
 from typing import Dict, List
 
@@ -8,14 +7,14 @@ from playwright.sync_api import Browser, sync_playwright
 
 # Data Models
 class PositionData:
-    def __init__(self, position: str, starter: str, second: str, third: str, fourth: str):
+    def __init__(self, position: str, starter: str, second: str, third: str, fourth: str) -> None:
         self.position = position
         self.starter = starter
         self.second = second
         self.third = third
         self.fourth = fourth
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, str]:
         return {
             "position": self.position,
             "starter": self.starter,
@@ -26,7 +25,7 @@ class PositionData:
 
 
 class TeamData:
-    def __init__(self, name: str, url: str):
+    def __init__(self, name: str, url: str) -> None:
         self.name = name
         self.url = url
 
@@ -95,17 +94,12 @@ def get_team_depth(browser: Browser, team_name: str, depth_url: str) -> Dict[str
 
 def save_team_data(team_name: str, data: Dict[str, List[PositionData]]) -> None:
     """Save depth chart data in JSON and Excel formats."""
-    folder_name = f"data/{team_name.lower().replace(' ', '_')}"
-    os.makedirs(folder_name, exist_ok=True)
-
-    # Save JSON
-    json_file_path = os.path.join(folder_name, "depth_chart.json")
-    with open(json_file_path, "w", encoding="utf-8") as f:
-        json.dump({k: [p.to_dict() for p in v] for k, v in data.items()}, f, indent=2)
-    print(f"Saved depth chart to {json_file_path}")
+    os.makedirs("depth_chart", exist_ok=True)
+    
+    team_filename = team_name.lower().replace(' ', '_')
 
     # Save Excel
-    excel_file_path = os.path.join(folder_name, "depth_chart.xlsx")
+    excel_file_path = os.path.join("depth_chart", f"{team_filename}.xlsx")
     all_rows: List[List[str]] = []
     for formation, positions in data.items():
         all_rows.append([formation.upper()])
@@ -117,7 +111,7 @@ def save_team_data(team_name: str, data: Dict[str, List[PositionData]]) -> None:
     print(f"Saved depth chart to {excel_file_path}")
 
 
-def main():
+def main() -> None:
     """Scrape and save depth charts for all NFL teams."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -137,6 +131,7 @@ def main():
         finally:
             browser.close()
     print("🎉 Finished processing all teams!")
+
 
 
 if __name__ == "__main__":
