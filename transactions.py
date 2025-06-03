@@ -15,7 +15,7 @@ from playwright.sync_api import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],   
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ browser: Optional[Browser] = None
 
 def generate_date_ranges(
     start_date: date, end_date: date
-) -> list[tuple[int, int]]: 
+) -> list[tuple[int, int]]:
     """Generate list of (year, month) tuples covering the date range."""
     date_ranges: set[tuple[int, int]] = set()
     current = start_date
@@ -111,7 +111,9 @@ def fetch_and_process_transactions(
                 [(row, year) for row in rows], start_date, end_date
             )
             transactions.extend(page_transactions)
-            logger.debug(f"Processed {len(page_transactions)} transactions from page {page_number}")
+            logger.debug(
+                f"Processed {len(page_transactions)} transactions from page {page_number}"
+            )
 
             next_page_link = page.query_selector(
                 ".nfl-o-table-pagination__next"
@@ -141,6 +143,8 @@ def fetch_and_process_transactions(
         f"Total transactions collected for {year}-{month:02d}: {len(transactions)}"
     )
     return transactions
+
+
 def process_transaction_rows(
     rows: list[tuple[Any, int]], start_date: date, end_date: date
 ) -> list[dict[str, str]]:
@@ -182,15 +186,6 @@ def process_transaction_rows(
                 else ""
             )
 
-            from_team_shortname_cell = row.query_selector(
-                "td:nth-child(1) .d3-o-club-shortname"
-            )
-            from_team_shortname = (
-                from_team_shortname_cell.inner_text().strip()
-                if from_team_shortname_cell
-                else ""
-            )
-
             # Extract to team
             to_team_fullname_cell = row.query_selector(
                 "td:nth-child(2) .d3-o-club-fullname"
@@ -201,20 +196,10 @@ def process_transaction_rows(
                 else ""
             )
 
-            to_team_shortname_cell = row.query_selector(
-                "td:nth-child(2) .d3-o-club-shortname"
-            )
-            to_team_shortname = (
-                to_team_shortname_cell.inner_text().strip()
-                if to_team_shortname_cell
-                else ""
-            )
-
             # Extract player name and URL
             player_link = row.query_selector("td:nth-child(4) a")
             if not player_link:
                 logger.warning("Missing player link")
-                continue
             full_name = player_link.inner_text().strip()
             player_href = player_link.get_attribute("href")
             name_parts = full_name.strip().split()
@@ -238,16 +223,14 @@ def process_transaction_rows(
 
             # Generate player key
             player_key = (
-                f"{first_name}_{last_name}_{to_team_shortname}".lower()
+                f"{first_name}_{last_name}_{to_team_fullname}".lower()
                 .replace(" ", "_")
                 .replace(".", "")
             )
 
             transaction_data: dict[str, str] = {
                 "from_team_fullname": from_team_fullname,
-                "from_team_shortname": from_team_shortname,
                 "to_team_fullname": to_team_fullname,
-                "to_team_shortname": to_team_shortname,
                 "date": str(trans_date.strftime("%Y-%m-%d")),
                 "first_name": first_name,
                 "last_name": last_name,
@@ -315,7 +298,7 @@ def main() -> None:
                 all_transactions.extend(month_transactions)
 
             df = pd.DataFrame(all_transactions)
-            df.to_excel("transactions.xlsx", index=False)
+            df.to_excel("transactions.xlsx", index=False)  # type: ignore
             logger.info(
                 f"Saved {len(all_transactions)} transactions to transactions.xlsx"
             )
