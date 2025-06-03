@@ -181,9 +181,12 @@ def process_transaction_rows(
             # Extract player name and URL
             player_link = row.query_selector("td:nth-child(4) a")
             if not player_link:
-                logger.warning("Missing player link")
-            player_name = player_link.inner_text().strip()
-            player_href = player_link.get_attribute("href")
+                player_cell = row.query_selector("td:nth-child(4)")
+                player_name = player_cell.inner_text().strip() if player_cell else "Unknown Player"
+                player_href = None
+            else:
+                player_name = player_link.inner_text().strip()
+                player_href = player_link.get_attribute("href")
 
             # Get position from player profile page
             position = (
@@ -220,8 +223,6 @@ def process_transaction_rows(
         except Exception as e:
             logger.error(f"Error processing row: {str(e)}")
     logger.debug(f"Processed {len(transactions)} valid transactions")
-    return transactions
-    logger.info(f"Processed {len(transactions)} valid transactions")
     return transactions
 
 

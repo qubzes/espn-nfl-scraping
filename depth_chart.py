@@ -157,10 +157,8 @@ def get_team_depth(
 
 def save_all_data(all_data: List[PlayerDepthData]) -> None:
     """Save all depth chart data to a single Excel file."""
-    os.makedirs("depth_chart", exist_ok=True)
-
     df = pd.DataFrame([player.to_dict() for player in all_data])
-    excel_file_path = os.path.join("depth_chart", "depth_chart.xlsx")
+    excel_file_path = "depth_chart.xlsx"
     df.to_excel(excel_file_path, index=False)
     print(f"Saved all depth chart data to {excel_file_path}")
 
