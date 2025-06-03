@@ -9,6 +9,7 @@ def main() -> None:
         page = browser.new_page()
 
         page.goto("https://www.nfl.com/teams", timeout=60000)
+        page.wait_for_selector(".nfl-c-custom-promo__body", timeout=10000)
         roster_data: list[dict[str, str]] = []
 
         team_selectors = page.query_selector_all(".nfl-c-custom-promo__body")
@@ -27,6 +28,7 @@ def main() -> None:
             team_roster_url = f"https://www.nfl.com{team_url}roster"
 
             page.goto(team_roster_url, timeout=60000)
+            page.wait_for_selector("tbody tr", timeout=10000)
 
             # Get player rows from roster table
             player_rows = page.query_selector_all("tbody tr")
@@ -57,6 +59,10 @@ def main() -> None:
                     try:
                         page.goto(
                             f"https://www.nfl.com{player_link}", timeout=60000
+                        )
+                        page.wait_for_selector(
+                            ".nfl-c-player-info__key:has-text('Age') + .nfl-c-player-info__value",
+                            timeout=10000,
                         )
                         age_element = page.query_selector(
                             '.nfl-c-player-info__key:has-text("Age") + .nfl-c-player-info__value'
