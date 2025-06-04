@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-
+import os
 import pandas as pd
 from playwright.sync_api import sync_playwright
 
@@ -22,6 +22,7 @@ def main() -> None:
         logger.info("Navigating to NFL teams page...")
         page.goto("https://www.nfl.com/teams", timeout=60000)
         roster_data: list[dict[str, str]] = []
+        date_scraped = datetime.now().strftime("%Y-%m-%d")
 
         team_selectors = page.query_selector_all(".nfl-c-custom-promo__body")
         logger.info(f"Found {len(team_selectors)} team sections")
@@ -44,7 +45,9 @@ def main() -> None:
 
             team_url = team_link.get_attribute("href")
             team_roster_url = f"https://www.nfl.com{team_url}roster"
-            teams_data.append({"name": team_name, "roster_url": team_roster_url})
+            teams_data.append(
+                {"name": team_name, "roster_url": team_roster_url}
+            )
 
         # Now process each team's roster
         for i, team_data in enumerate(teams_data, 1):
@@ -74,7 +77,9 @@ def main() -> None:
                     ".nfl-o-roster__player-name"
                 )
                 if not player_link_element:
-                    logger.warning(f"Player link not found for row {j} in {team_name}")
+                    logger.warning(
+                        f"Player link not found for row {j} in {team_name}"
+                    )
                     continue
 
                 player_name = player_link_element.inner_text().strip()
@@ -104,17 +109,25 @@ def main() -> None:
                         "experience": experience,
                         "college": college,
                         "player_key": player_key,
-                        "date_scraped": datetime.now().strftime("%Y-%m-%d"),
+                        "date_scraped": date_scraped,
                     }
                 )
 
         logger.info(f"Scraped data for {len(roster_data)} total players")
-        logger.info("Saving data to Excel file...")
+
+        # Create directory and filename with date
+        output_dir = "nfl/rosters"
+        os.makedirs(output_dir, exist_ok=True)
+
+        filename = f"nfl_roster_{date_scraped}.xlsx"
+        filepath = os.path.join(output_dir, filename)
+
+        logger.info(f"Saving data to {filepath}...")
 
         df = pd.DataFrame(roster_data)
-        df.to_excel("roster_data.xlsx", index=False)
+        df.to_excel(filepath, index=False)
 
-        logger.info("Data saved successfully to roster_data.xlsx")
+        logger.info(f"Data saved successfully to {filepath}")
         browser.close()
         logger.info("Scraping completed successfully")
 

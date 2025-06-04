@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Dict, List
-
+import os
 import pandas as pd
 from playwright.sync_api import Browser, sync_playwright
 
@@ -187,9 +187,14 @@ def save_injury_data(injuries: List[InjuryData], year: int, week: int) -> None:
 
     df = pd.DataFrame([injury.to_dict() for injury in injuries])
 
-    filename = f"injuries_{year}_week{week}.xlsx"
-    df.to_excel(filename, index=False)
-    logger.info(f"Saved {len(injuries)} injury records to {filename}")
+    output_dir = "nfl/injuries"
+    os.makedirs(output_dir, exist_ok=True)
+    filename = f"nfl_injuries_{year}_{week}.xlsx"
+    filepath = os.path.join(output_dir, filename)
+    
+    df.to_excel(filepath, index=False)
+    logger.info(f"Saved {len(injuries)} injury records to {filepath}")
+
 
 
 def main() -> None:

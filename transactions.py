@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import re
 from datetime import date, datetime
 from typing import Any, Optional
@@ -257,6 +258,15 @@ def main() -> None:
             logger.info("No date range provided, using today's date as default")
 
         logger.info(f"Processing date range: {start_date} to {end_date}")
+        
+        # Create directory if it doesn't exist
+        output_dir = "nfl/transactions"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Generate filename with date range
+        filename = f"nfl_transaction_{start_date}_to_{end_date}.xlsx"
+        filepath = os.path.join(output_dir, filename)
+        
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
             page = browser.new_page()
@@ -269,9 +279,9 @@ def main() -> None:
                 all_transactions.extend(month_transactions)
 
             df = pd.DataFrame(all_transactions)
-            df.to_excel("transactions.xlsx", index=False)  # type: ignore
+            df.to_excel(filepath, index=False)  # type: ignore
             logger.info(
-                f"Saved {len(all_transactions)} transactions to transactions.xlsx"
+                f"Saved {len(all_transactions)} transactions to {filepath}"
             )
             browser.close()
 

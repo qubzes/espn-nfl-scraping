@@ -156,9 +156,13 @@ def get_team_depth(
 
 
 def save_all_data(all_data: List[PlayerDepthData]) -> None:
-    """Save all depth chart data to a single Excel file."""
+    """Save all depth chart data to a single Excel file with date-based naming."""
+    output_dir = "nfl/depth_charts"
+    os.makedirs(output_dir, exist_ok=True)
+        current_date = datetime.now().strftime("%Y-%m-%d")
+    excel_file_path = os.path.join(output_dir, f"nfl_depth_chart_{current_date}.xlsx")
+    
     df = pd.DataFrame([player.to_dict() for player in all_data])
-    excel_file_path = "depth_chart.xlsx"
     df.to_excel(excel_file_path, index=False)
     print(f"Saved all depth chart data to {excel_file_path}")
 
